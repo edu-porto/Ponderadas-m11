@@ -4,11 +4,10 @@
 #include "img_converters.h"
 #include "Arduino.h"
 #include "fb_gfx.h"
-#include "soc/soc.h"           //disable brownout problems
-#include "soc/rtc_cntl_reg.h"  //disable brownout problems
+#include "soc/soc.h"           
+#include "soc/rtc_cntl_reg.h"  
 #include "esp_http_server.h"
 
-//Replace with your network credentials
 const char* ssid = "Inteli.Iot";
 const char* password = "@Intelix10T#";
 
@@ -117,7 +116,7 @@ static esp_err_t stream_handler(httpd_req_t* req) {
   while (true) {
     fb = esp_camera_fb_get();
     if (!fb) {
-      Serial.println("Camera capture failed");
+      Serial.println("Captura falhou");
       res = ESP_FAIL;
     } else {
       if (fb->width > 400) {
@@ -126,7 +125,7 @@ static esp_err_t stream_handler(httpd_req_t* req) {
           esp_camera_fb_return(fb);
           fb = NULL;
           if (!jpeg_converted) {
-            Serial.println("JPEG compression failed");
+            Serial.println("Compressão falhou");
             res = ESP_FAIL;
           }
         } else {
@@ -178,7 +177,7 @@ void startCameraServer() {
 }
 
 void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  //disable brownout detector
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  
 
   Serial.begin(115200);
   Serial.setDebugOutput(false);
@@ -206,9 +205,9 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_UXGA;
+    config.frame_size = FRAMESIZE_SVGA;
     config.jpeg_quality = 10;
-    config.fb_count = 2;
+    config.fb_count = 1;
   } else {
     config.frame_size = FRAMESIZE_SVGA;
     config.jpeg_quality = 12;
@@ -218,7 +217,7 @@ void setup() {
   // Camera init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed with error 0x%x", err);
+    Serial.printf("Erro na camera  0x%x", err);
     return;
   }
   // Wi-Fi connection
@@ -228,9 +227,9 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("");
-  Serial.println("WiFi connected");
+  Serial.println("WiFi conectado");
 
-  Serial.print("Camera Stream Ready! Go to: http://");
+  Serial.print("Transmissão disponível em: http://");
   Serial.print(WiFi.localIP());
 
   // Start streaming web server
