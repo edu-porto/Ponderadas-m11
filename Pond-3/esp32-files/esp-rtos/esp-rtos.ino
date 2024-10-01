@@ -46,6 +46,12 @@ SemaphoreHandle_t frameSemaphore;
 camera_fb_t* latestFrame = NULL;
 SemaphoreHandle_t frameMutex;
 
+// Debug variables
+unsigned long lastAcquisitionTime = 0;
+unsigned long lastStreamTime = 0;
+unsigned long frameCount = 0;
+unsigned long streamCount = 0;
+
 // Image acquisition thread
 void imageAcquisitionTask(void* parameter) {
   while (true) {
@@ -64,6 +70,16 @@ void imageAcquisitionTask(void* parameter) {
     xSemaphoreGive(frameMutex);
 
     xSemaphoreGive(frameSemaphore);
+
+    // Debug output
+    frameCount++;
+    unsigned long currentTime = millis();
+    if (currentTime - lastAcquisitionTime >= 5000) {
+      Serial.printf("Acquisition thread: Captured %lu frames in last 5 seconds\n", frameCount);
+      frameCount = 0;
+      lastAcquisitionTime = currentTime;
+    }
+
     vTaskDelay(100 / portTICK_PERIOD_MS); // Adjust delay as needed
   }
 }
@@ -123,6 +139,14 @@ static esp_err_t stream_handler(httpd_req_t* req) {
       } else if (_jpg_buf) {
         free(_jpg_buf);
         _jpg_buf = NULL;
+      }
+      // Debug output
+      streamCount++;
+      unsigned long currentTime = millis();
+      if (currentTime - lastStreamTime >= 5000) {
+        Serial.printf("Streaming thread: Sent %lu frames in last 5 seconds\n", streamCount);
+        streamCount = 0;
+        lastStreamTime = currentTime;
       }
 
       if (res != ESP_OK) {
