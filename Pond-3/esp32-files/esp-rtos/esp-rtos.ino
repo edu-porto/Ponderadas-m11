@@ -1,5 +1,6 @@
 #include "esp_camera.h"
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include "esp_timer.h"
 #include "img_converters.h"
 #include "Arduino.h"
@@ -41,18 +42,11 @@ static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 
 httpd_handle_t stream_httpd = NULL;
 
-// Global variables for thread synchronization
 SemaphoreHandle_t frameSemaphore;
 camera_fb_t* latestFrame = NULL;
 SemaphoreHandle_t frameMutex;
 
-// Debug variables
-unsigned long lastAcquisitionTime = 0;
-unsigned long lastStreamTime = 0;
-unsigned long frameCount = 0;
-unsigned long streamCount = 0;
-
-// Image acquisition thread
+// Thread pra pegar as imagens da camera 
 void imageAcquisitionTask(void* parameter) {
   while (true) {
     camera_fb_t* fb = esp_camera_fb_get();
@@ -70,16 +64,6 @@ void imageAcquisitionTask(void* parameter) {
     xSemaphoreGive(frameMutex);
 
     xSemaphoreGive(frameSemaphore);
-
-    // Debug output
-    frameCount++;
-    unsigned long currentTime = millis();
-    if (currentTime - lastAcquisitionTime >= 5000) {
-      Serial.printf("Acquisition thread: Captured %lu frames in last 5 seconds\n", frameCount);
-      frameCount = 0;
-      lastAcquisitionTime = currentTime;
-    }
-
     vTaskDelay(100 / portTICK_PERIOD_MS); // Adjust delay as needed
   }
 }
@@ -140,14 +124,6 @@ static esp_err_t stream_handler(httpd_req_t* req) {
         free(_jpg_buf);
         _jpg_buf = NULL;
       }
-      // Debug output
-      streamCount++;
-      unsigned long currentTime = millis();
-      if (currentTime - lastStreamTime >= 5000) {
-        Serial.printf("Streaming thread: Sent %lu frames in last 5 seconds\n", streamCount);
-        streamCount = 0;
-        lastStreamTime = currentTime;
-      }
 
       if (res != ESP_OK) {
         break;
@@ -156,6 +132,32 @@ static esp_err_t stream_handler(httpd_req_t* req) {
   }
 
   return res;
+}
+
+// Thread pra pegar a resposta do haar cascade 
+
+void fetchBoundingBoxesTask(void* parameter) {
+  for (;;) {
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      http.begin("http://10.128.0.50:5000/bounding_boxes"); 
+      int httpResponseCode = http.GET(); 
+
+      if (httpResponseCode == 200) {
+        String response = http.getString(); 
+        Serial.println("Response: " + response); 
+      } else {
+        Serial.print("GET request failed with error: ");
+        Serial.println(httpResponseCode);
+      }
+
+      http.end(); 
+    } else {
+      Serial.println("WiFi not connected, retrying...");
+    }
+
+    vTaskDelay(2000 / portTICK_PERIOD_MS); 
+  }
 }
 
 void startCameraServer() {
@@ -212,14 +214,13 @@ void setup() {
     config.fb_count = 1;
   }
 
-  // Camera init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
 
-  // Wi-Fi connection
+  // Wi-Fi 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -228,21 +229,21 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
 
-  // Initialize semaphores
+  // Iniciando os semaforos
   frameSemaphore = xSemaphoreCreateBinary();
   frameMutex = xSemaphoreCreateMutex();
 
-  // Create image acquisition task
+  // Iniciando as threads 
   xTaskCreatePinnedToCore(imageAcquisitionTask, "ImageAcquisition", 4096, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(fetchBoundingBoxesTask, "FetchBoundingBoxes", 4096, NULL, 1, NULL, 1);
 
   Serial.print("Camera Stream Ready! Go to: http://");
   Serial.println(WiFi.localIP());
 
-  // Start streaming web server
+  // Stremando os dados 
   startCameraServer();
 }
 
 void loop() {
-  // The main loop can be left empty as our tasks are now handling the work
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 }

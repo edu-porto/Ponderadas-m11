@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .stream-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .stream-box {
+            width: 600px;
+            height: 520px;
+            border: 1px solid #000;
+        }
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ponderada 3</h1>
+
+    <div class="stream-container">
+        <div class="stream-box">
+            <h3>Vídeo processado</h3>
+            <img src="{{ url_for('haar_cascade_feed') }}" >
+        </div>
+        <div id="bounding-boxes">
+            <h3>Caixinha do haar:</h3>
+            <div id="boxes"></div> <!-- This will show bounding box values -->
+        </div>
+    
+        <script>
+            // Function to fetch bounding boxes and update the display
+            function updateBoundingBoxes() {
+                fetch('/bounding_boxes')
+                    .then(response => response.json())
+                    .then(boundingBoxes => {
+                        const boxesDiv = document.getElementById('boxes');
+                        boxesDiv.innerHTML = ''; // Clear previous boxes
+    
+                        if (boundingBoxes.length > 0) {
+                            boundingBoxes.forEach(box => {
+                                boxesDiv.innerHTML += `X: ${box.x}, Y: ${box.y}, Width: ${box.w}, Height: ${box.h}<br>`;
+                            });
+                        } else {
+                            boxesDiv.innerHTML = 'Nada detectado.';
+                        }
+                    })
+                    .catch(error => console.error('erro:', error));
+            }
+    
+            // Update bounding boxes every second
+            setInterval(updateBoundingBoxes, 1000);
+        </script>
+    </div>
+</body>
+</html>
